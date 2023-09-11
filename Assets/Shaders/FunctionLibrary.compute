@@ -1,0 +1,270 @@
+// вычислительный шейдер должен содержать основную функию (ядро)
+#pragma kernel WaveKernel
+#pragma kernel WaveToMultiWaveKernel
+#pragma kernel WaveToRippleKernel
+#pragma kernel WaveToSphereKernel
+#pragma kernel WaveToTorusKernel
+#pragma kernel WaveToStormKernel
+#pragma kernel WaveToVavylonGardenKernel
+
+
+#pragma kernel MultiWaveToWaveKernel
+#pragma kernel MultiWaveKernel
+#pragma kernel MultiWaveToRippleKernel
+#pragma kernel MultiWaveToSphereKernel
+#pragma kernel MultiWaveToTorusKernel
+#pragma kernel MultiWaveToStormKernel
+#pragma kernel MultiWaveToVavylonGardenKernel
+
+
+#pragma kernel RippleToWaveKernel
+#pragma kernel RippleToMultiWaveKernel
+#pragma kernel RippleKernel
+#pragma kernel RippleToSphereKernel
+#pragma kernel RippleToTorusKernel
+#pragma kernel RippleToStormKernel
+#pragma kernel RippleToVavylonGardenKernel
+
+
+
+#pragma kernel SphereToWaveKernel
+#pragma kernel SphereToMultiWaveKernel
+#pragma kernel SphereToRippleKernel
+#pragma kernel SphereKernel
+#pragma kernel SphereToTorusKernel
+#pragma kernel SphereToStormKernel
+#pragma kernel SphereToVavylonGardenKernel
+
+
+
+#pragma kernel TorusToWaveKernel
+#pragma kernel TorusToMultiWaveKernel
+#pragma kernel TorusToRippleKernel
+#pragma kernel TorusToSphereKernel
+#pragma kernel TorusKernel
+#pragma kernel TorusToStormKernel
+#pragma kernel TorusToVavylonGardenKernel
+
+#pragma kernel StormToWaveKernel
+#pragma kernel StormToMultiWaveKernel
+#pragma kernel StormToRippleKernel
+#pragma kernel StormToSphereKernel
+#pragma kernel StormToTorusKernel
+#pragma kernel StormKernel
+#pragma kernel StormToVavylonGardenKernel
+
+#pragma kernel VavylonGardenToWaveKernel
+#pragma kernel VavylonGardenToMultiWaveKernel
+#pragma kernel VavylonGardenToRippleKernel
+#pragma kernel VavylonGardenToSphereKernel
+#pragma kernel VavylonGardenToTorusKernel
+#pragma kernel VavylonGardenToStormKernel
+#pragma kernel VavylonGardenKernel
+
+
+// в hlsl вычислительный буффер называется структурированным
+RWStructuredBuffer<float3> _Positions;
+
+
+
+uint _Resolution;
+
+float _Step, _Time, _TransitionProgress;
+
+
+// конвертирование id- потока в uv-координаты
+float2 GetUV (uint3 id){
+    return (id.xy + 0.5) * _Step - 1.0;
+}
+
+void SetPosition (uint3 id, float3 position){
+    if(id.x < _Resolution && id.y < _Resolution){ // избежание недопустимых позиций
+        _Positions[id.x + id.y * _Resolution] = position; // запись 2д-координат в одномерный массив
+    }
+}
+
+#define PI 3.14159265358
+
+float3 Wave(float u, float v, float t){
+        float3 position;
+        float dif = cos(u + t);
+
+        position.x = u;
+        position.y = dif * sin(PI * (u + v + t));
+        position.z = v;
+        return position;
+}
+
+float3 MultiWave(float u, float v, float t){
+        float3 position;
+
+        float y = sin(PI *(u + 0.5 + t));
+        float dif = sin(u - v);
+
+        y += 0.5 * sin(2 * PI * (v + t));
+        y += dif * sin(PI * (u + v + 0.25 * t));
+
+        position.x = u;
+        position.y = y * (1 / 2.5);
+        position.z = v;
+
+        return position;
+}
+
+
+float3 Ripple(float u, float v, float t){
+        float3 position;
+
+        float d =  sqrt((u * u + v * v));
+        float y =  sin(PI * (4 * d - t));
+
+        position.x = u;
+        position.y = y / (1 + 10 * d);
+        position.z = v;
+
+        return position;
+}
+
+float3 Sphere(float u, float v, float t){
+        float3 position;
+        float r = 0.9 + 0.1 * sin(PI * (12.0 * u + 8.0 * v + t));
+        float s = r * cos(0.5 * PI * v);
+
+        position.x = s * sin(PI * u);
+        position.y = r * sin(0.5 * PI * v);
+        position.z = s * cos(PI * u);
+
+        return position;
+}
+
+float3 Torus(float u, float v, float t){
+        float3 position;
+        float r1 = 0.7 + 0.1 * sin(PI * (8.0 * u + 0.5 * t));
+        float r2 = 0.15 + 0.05 * cos(PI * (16.0 * u + 8.0 * v + 3.0 * t));
+        float s = r1 + r2 * cos(PI * v);
+
+        position.x = s * sin(PI * u);
+        position.y = r2 * sin(PI * v);
+        position.z = s * cos(PI * u);
+
+        return position;
+}
+
+
+float3 Storm(float u, float v, float t){
+        float3 position;
+        float r = cos(4 * PI * v * t * 0.3);
+
+        position.x = r * sin(PI * u);
+        position.y = v;
+        position.z = r * cos(PI * u);
+
+        return position;
+}
+
+
+
+
+float3 VavylonGarden(float u, float v, float t){
+        float3 position;
+        float r = 0.9 + 0.1 * sin(16 * PI * v);
+        float s = r * cos(0.5 * PI * v);
+
+        position.x = s * sin(PI * (u + t * 0.6));
+        position.y = r * sin(PI * 0.5 * v);
+        position.z = s * cos(PI * (u + t * 0.6));
+
+        return position;
+    }
+
+
+
+// функции вычислительных шейдеров выполняются в потоках
+// мы указываем сколько потоков имеет одна группа
+// эти 3 аргумента можно использовать в организации в 3 измерениях
+// [numthreads(8,8,1)]
+// каждый поток идентифицируется вектором 3 безхнаковых чисел
+// void FunctionKernel (uint3 id : SV_DispatchThreadID){
+//    float2 uv = GetUV(id);
+//    SetPosition(id, Wave(uv.x, uv.y, _Time));
+// }
+
+// ## - оператор макроконкатенации
+
+#define KERNEL_FUNCTION(function) \
+[numthreads(8,8,1)]  \
+void function##Kernel (uint3 id : SV_DispatchThreadID){  \
+    float2 uv = GetUV(id);   \
+    SetPosition(id, function(uv.x, uv.y, _Time));  \
+}
+
+#define KERNEL_MORPH_FUNCTION(functionA, functionB) \
+[numthreads(8,8,1)]  \
+void functionA##To##functionB##Kernel (uint3 id : SV_DispatchThreadID){  \
+    float2 uv = GetUV(id);   \
+    float3 position = lerp( \
+        functionA(uv.x, uv.y, _Time), functionB(uv.x, uv.y, _Time), \
+        _TransitionProgress \
+    ); \
+    SetPosition(id, position);  \
+} 
+
+KERNEL_FUNCTION(Wave)
+KERNEL_FUNCTION(MultiWave)
+KERNEL_FUNCTION(Ripple)
+KERNEL_FUNCTION(Sphere)
+KERNEL_FUNCTION(Torus)
+KERNEL_FUNCTION(Storm)
+KERNEL_FUNCTION(VavylonGarden)
+
+
+KERNEL_MORPH_FUNCTION(Wave, MultiWave);
+KERNEL_MORPH_FUNCTION(Wave, Ripple);
+KERNEL_MORPH_FUNCTION(Wave, Sphere);
+KERNEL_MORPH_FUNCTION(Wave, Torus);
+KERNEL_MORPH_FUNCTION(Wave, Storm);
+KERNEL_MORPH_FUNCTION(Wave, VavylonGarden);
+
+KERNEL_MORPH_FUNCTION(MultiWave, Wave);
+KERNEL_MORPH_FUNCTION(MultiWave, Ripple);
+KERNEL_MORPH_FUNCTION(MultiWave, Sphere);
+KERNEL_MORPH_FUNCTION(MultiWave, Torus);
+KERNEL_MORPH_FUNCTION(MultiWave, Storm);
+KERNEL_MORPH_FUNCTION(MultiWave, VavylonGarden);
+
+KERNEL_MORPH_FUNCTION(Ripple, Wave);
+KERNEL_MORPH_FUNCTION(Ripple, MultiWave);
+KERNEL_MORPH_FUNCTION(Ripple, Sphere);
+KERNEL_MORPH_FUNCTION(Ripple, Torus);
+KERNEL_MORPH_FUNCTION(Ripple, Storm);
+KERNEL_MORPH_FUNCTION(Ripple, VavylonGarden);
+
+
+KERNEL_MORPH_FUNCTION(Sphere, Wave);
+KERNEL_MORPH_FUNCTION(Sphere, MultiWave);
+KERNEL_MORPH_FUNCTION(Sphere, Ripple);
+KERNEL_MORPH_FUNCTION(Sphere, Torus);
+KERNEL_MORPH_FUNCTION(Sphere, Storm);
+KERNEL_MORPH_FUNCTION(Sphere, VavylonGarden);
+
+
+KERNEL_MORPH_FUNCTION(Torus, Wave);
+KERNEL_MORPH_FUNCTION(Torus, MultiWave);
+KERNEL_MORPH_FUNCTION(Torus, Ripple);
+KERNEL_MORPH_FUNCTION(Torus, Sphere);
+KERNEL_MORPH_FUNCTION(Torus, Storm);
+KERNEL_MORPH_FUNCTION(Torus, VavylonGarden);
+
+KERNEL_MORPH_FUNCTION(Storm, Wave);
+KERNEL_MORPH_FUNCTION(Storm, MultiWave);
+KERNEL_MORPH_FUNCTION(Storm, Ripple);
+KERNEL_MORPH_FUNCTION(Storm, Sphere);
+KERNEL_MORPH_FUNCTION(Storm, Torus);
+KERNEL_MORPH_FUNCTION(Storm, VavylonGarden);
+
+KERNEL_MORPH_FUNCTION(VavylonGarden, Wave);
+KERNEL_MORPH_FUNCTION(VavylonGarden, MultiWave);
+KERNEL_MORPH_FUNCTION(VavylonGarden, Ripple);
+KERNEL_MORPH_FUNCTION(VavylonGarden, Sphere);
+KERNEL_MORPH_FUNCTION(VavylonGarden, Torus);
+KERNEL_MORPH_FUNCTION(VavylonGarden, Storm);
